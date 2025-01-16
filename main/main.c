@@ -9,42 +9,51 @@
 #include <driver/ledc.h>
 
 // 定义消息类型
-typedef enum {
+typedef enum
+{
     MSG_SENSOR_DATA,
     MSG_GAIT_COMMAND,
     MSG_SERVO_CONTROL
 } message_type_t;
 
-typedef enum {
+typedef enum
+{
     GAIT_A,
     GAIT_B,
     GAIT_C,
     GAIT_D,
+    // GAIT_E,
 } GAIT_TYPE;
 
 // 定义消息结构体
-typedef struct {
+typedef struct
+{
     message_type_t type;
-    union {
-        struct {
+    union
+    {
+        struct
+        {
             int sensor_value; // 传感器数据
         } sensor_data;
-        struct {
+        struct
+        {
             int gait_pattern; // 歩态模式
         } gait_command;
-        struct {
-            int servo_id;     // 舵机ID
-            int angle;        // 舵机角度
+        struct
+        {
+            int8_t servo_id; // 舵机ID
+            int8_t angle;    // 舵机角度
         } servo_control;
     };
 } message_t;
 
-typedef struct {
+typedef struct
+{
     uint16_t group_id;
     Coordination coord;
 } ServoMessage;
 
-const int SERVO_GPIOs[18] = {
+const int8_t SERVO_GPIOs[18] = {
     11,
     12,
     13,
@@ -90,46 +99,92 @@ QueueHandle_t xServoQueue;
 //     }
 // }
 
-void set_leg_group(int num, bool raise, bool forward){
-    for (int i = 0; i < 3; i++) {
+void set_leg_group(int8_t num, bool raise, bool forward)
+{
+    for (int8_t i = 0; i < 3; i++)
+    {
         ServoMessage *msg = (ServoMessage *)pvPortMalloc(sizeof(ServoMessage));
-        if (msg == NULL) {
+        if (msg == NULL)
+        {
             printf("Failed to allocate memory for message\n");
             continue;
         }
 
-        // 填充消息
         msg->coord.x = Step ? forward : 0;
         msg->coord.y = Wingspan;
-        msg->coord.z = - (raise ? CoreHeight + LegRiseHeight : CoreHeight);
+        msg->coord.z = -(raise ? CoreHeight + LegRiseHeight : CoreHeight);
         msg->group_id = num + i;
 
-        // 发送消息到队列
-        if (xQueueSend(xServoQueue, &msg, portMAX_DELAY) != pdPASS) {
-            printf("Failed to send message to queue\n");
-            vPortFree(msg); // 发送失败时释放内存
+        if (xQueueSend(xServoQueue, &msg, portMAX_DELAY) != pdPASS)
+        {
+            printf("Failed to send servo message to queue\n");
+            vPortFree(msg);
         }
     }
 }
 
-void gait_control_task(void *pvParameters) {
-    int gait_pattern = 0;
-    while (1) {
+void gait_control_task(void *pvParameters)
+{
+    int8_t gait_pattern = 0;
+    while (1)
+    {
+        switch (gait_pattern)
+        {
+        case GAIT_A:
+            // Gait A:
+            // - Leg group 0: Lowered and not moving forward (stance phase)
+            // - Leg group 1: Lowered and moving forward (swing phase)
+            set_leg_group(0, false, false);
+            set_leg_group(1, false, true);
+            break;
 
-        
-        gait_pattern ++;
-        if(gait_pattern == 4){
+        case GAIT_B:
+            // Gait B:
+            // - Leg group 0: Raised and moving forward (swing phase)
+            // - Leg group 1: Lowered and not moving forward (stance phase)
+            set_leg_group(0, true, true);
+            set_leg_group(1, false, false);
+            break;
+
+        case GAIT_C:
+            // Gait C:
+            // - Leg group 0: Lowered and moving forward (swing phase)
+            // - Leg group 1: Lowered and not moving forward (stance phase)
+            set_leg_group(0, false, true);
+            set_leg_group(1, false, false);
+            break;
+
+        case GAIT_D:
+            // Gait D:
+            // - Leg group 0: Lowered and not moving forward (stance phase)
+            // - Leg group 1: Raised and moving forward (swing phase)
+            set_leg_group(0, false, false);
+            set_leg_group(1, true, true);
+            break;
+        // case GAIT_E:
+        //     set_leg_group(0, false, false);
+        //     set_leg_group(1, false, true);
+        //     break;
+        default:
+            break;
+        }
+
+        gait_pattern++;
+        if (gait_pattern == 4)
+        {
             gait_pattern = 0;
         }
     }
 }
 
-void servo_control_task(void *pvParameters) {
-    while (1) {
+void servo_control_task(void *pvParameters)
+{
+    while (1)
+    {
         ServoMessage msg;
 
-        // 从舵机控制队列接收消息
-        if (xQueueReceive(xServoQueue, &msg, portMAX_DELAY) == pdPASS) {
+        if (xQueueReceive(xServoQueue, &msg, portMAX_DELAY) == pdPASS)
+        {
             HexapodLegServoDegree degrees = hexapod_leg_position_to_servo_degrees(msg.coord);
             set_servo_angle(msg.group_id * 3 + 0, degrees.a);
             set_servo_angle(msg.group_id * 3 + 1, degrees.b);
@@ -138,7 +193,8 @@ void servo_control_task(void *pvParameters) {
     }
 }
 
-void app_main() {
+void app_main()
+{
     i2c_master_init();
     ESP_LOGI("PCA9685", "I2C initialized");
 
@@ -149,7 +205,8 @@ void app_main() {
 
     // xSensorQueue = xQueueCreate(10, sizeof(message_t));
     xServoQueue = xQueueCreate(10, sizeof(ServoMessage));
-    if (/*xSensorQueue == NULL || */xServoQueue == NULL) {
+    if (/*xSensorQueue == NULL || */ xServoQueue == NULL)
+    {
         printf("Failed to create message queues\n");
         return;
     }
@@ -162,7 +219,8 @@ void app_main() {
     xTaskCreate(servo_control_task, "servo_control_task", 2048, NULL, 5, NULL);
 
     // 主任务不需要做其他事情
-    while (1) {
+    while (1)
+    {
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
