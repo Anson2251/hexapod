@@ -49,7 +49,7 @@ typedef struct
 
 typedef struct
 {
-    uint16_t group_id;
+    uint16_t leg_id;
     Coordination coord;
 } ServoMessage;
 
@@ -103,23 +103,18 @@ void set_leg_group(int8_t num, bool raise, bool forward)
 {
     for (int8_t i = 0; i < 3; i++)
     {
-        ServoMessage *msg = (ServoMessage *)pvPortMalloc(sizeof(ServoMessage));
-        if (msg == NULL)
-        {
-            printf("Failed to allocate memory for message\n");
-            continue;
-        }
-
-        msg->coord.x = Step ? forward : 0;
-        msg->coord.y = Wingspan;
-        msg->coord.z = -(raise ? CoreHeight + LegRiseHeight : CoreHeight);
-        msg->group_id = num + i;
+        uint8_t leg_id = num * 3 + i;
+        ServoMessage msg; // Use a stack-allocated variable
+        msg.coord.x = Step ? forward : 0;
+        msg.coord.y = Wingspan;
+        msg.coord.z = -(raise ? CoreHeight + LegRiseHeight : CoreHeight);
+        msg.leg_id = leg_id; // one group has 3 legs, each leg has 3 servos
 
         if (xQueueSend(xServoQueue, &msg, portMAX_DELAY) != pdPASS)
         {
-            printf("Failed to send servo message to queue\n");
-            vPortFree(msg);
+            ESP_LOGE("Gait Control", "Failed to send servo message for leg %d to queue\n", leg_id);
         }
+        ESP_LOGI("Gait Control", "Servo message sent for leg %d: (X: %lf, Y: %lf, Z: %lf)", leg_id, msg.coord.x, msg.coord.y, msg.coord.z);
     }
 }
 
@@ -136,6 +131,7 @@ void gait_control_task(void *pvParameters)
             // - Leg group 1: Lowered and moving forward (swing phase)
             set_leg_group(0, false, false);
             set_leg_group(1, false, true);
+            ESP_LOGI("Gait Control", "Gait A");
             break;
 
         case GAIT_B:
@@ -144,6 +140,7 @@ void gait_control_task(void *pvParameters)
             // - Leg group 1: Lowered and not moving forward (stance phase)
             set_leg_group(0, true, true);
             set_leg_group(1, false, false);
+            ESP_LOGI("Gait Control", "Gait B");
             break;
 
         case GAIT_C:
@@ -152,6 +149,7 @@ void gait_control_task(void *pvParameters)
             // - Leg group 1: Lowered and not moving forward (stance phase)
             set_leg_group(0, false, true);
             set_leg_group(1, false, false);
+            ESP_LOGI("Gait Control", "Gait C");
             break;
 
         case GAIT_D:
@@ -160,12 +158,14 @@ void gait_control_task(void *pvParameters)
             // - Leg group 1: Raised and moving forward (swing phase)
             set_leg_group(0, false, false);
             set_leg_group(1, true, true);
+            ESP_LOGI("Gait Control", "Gait D");
             break;
         // case GAIT_E:
         //     set_leg_group(0, false, false);
         //     set_leg_group(1, false, true);
         //     break;
         default:
+            ESP_LOGE("Gait Control", "Invalid gait pattern");
             break;
         }
 
@@ -174,6 +174,8 @@ void gait_control_task(void *pvParameters)
         {
             gait_pattern = 0;
         }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
@@ -186,9 +188,9 @@ void servo_control_task(void *pvParameters)
         if (xQueueReceive(xServoQueue, &msg, portMAX_DELAY) == pdPASS)
         {
             HexapodLegServoDegree degrees = hexapod_leg_position_to_servo_degrees(msg.coord);
-            set_servo_angle(msg.group_id * 3 + 0, degrees.a);
-            set_servo_angle(msg.group_id * 3 + 1, degrees.b);
-            set_servo_angle(msg.group_id * 3 + 2, degrees.c);
+            set_leg_angle(msg.leg_id, degrees);
+            ESP_LOGI("Servo Control", "Servo message received for leg %d: (X: %lf, Y: %lf, Z: %lf)", msg.leg_id, msg.coord.x, msg.coord.y, msg.coord.z);
+            ESP_LOGI("Servo Control", "Servo angles set for leg %d: (A: %d, B: %d, C: %d)", msg.leg_id, degrees.a, degrees.b, degrees.c);
         }
     }
 }
@@ -201,24 +203,26 @@ void app_main()
     pca9685_init();
     ESP_LOGI("PCA9685", "PCA9685 initialized");
 
-    printf("All drivers initialized\n");
+    ESP_LOGI("Driver", "All drivers initialised\n");
 
     // xSensorQueue = xQueueCreate(10, sizeof(message_t));
-    xServoQueue = xQueueCreate(10, sizeof(ServoMessage));
+    xServoQueue = xQueueCreate(32, sizeof(ServoMessage));
     if (/*xSensorQueue == NULL || */ xServoQueue == NULL)
     {
-        printf("Failed to create message queues\n");
+        ESP_LOGE("Driver", "Failed to create message queues\n");
         return;
     }
+
+    ESP_LOGI("Driver", "Servo message queue created\n");
+
 
     // 创建传感器任务
     // xTaskCreate(sensor_task, "sensor_task", 2048, NULL, 5, NULL);
 
-    xTaskCreate(gait_control_task, "gait_control_task", 2048, NULL, 5, NULL);
+    xTaskCreate(gait_control_task, "gait_control_task", 4096, NULL, 5, NULL);
+    xTaskCreate(servo_control_task, "servo_control_task", 4096, NULL, 5, NULL);
 
-    xTaskCreate(servo_control_task, "servo_control_task", 2048, NULL, 5, NULL);
-
-    // 主任务不需要做其他事情
+    // idle
     while (1)
     {
         vTaskDelay(pdMS_TO_TICKS(1000));

@@ -18,6 +18,10 @@
 #define Wingspan 0.5
 #define Step 0.3
 
+#define ServoMaxDegree 180
+#define ServoMinDegree 0
+#define ServoCalibrationFactor 1
+
 typedef struct {
     double x;
     double y;
@@ -25,15 +29,19 @@ typedef struct {
 } Coordination;
 
 typedef struct {
-    int a;
-    int b;
-    int c;
+    uint8_t a;
+    uint8_t b;
+    uint8_t c;
 } HexapodLegServoDegree;
+
+uint8_t calibrate_degree(uint8_t degree);
 
 /**
  * Convert leg end point coordination to servo degrees
  */
 HexapodLegServoDegree hexapod_leg_position_to_servo_degrees(Coordination coord);
+
+void set_leg_angle(uint8_t leg_id, HexapodLegServoDegree degrees);
 
 void i2c_master_init();
 
