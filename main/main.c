@@ -53,27 +53,6 @@ typedef struct
     Coordination coord;
 } ServoMessage;
 
-const int8_t SERVO_GPIOs[18] = {
-    11,
-    12,
-    13,
-    14,
-    15,
-    16,
-    17,
-    18,
-    19,
-    20,
-    21,
-    22,
-    23,
-    24,
-    25,
-    26,
-    27,
-    28,
-};
-
 // /** Sensor Data Queue */
 // QueueHandle_t xSensorQueue;
 
@@ -197,13 +176,7 @@ void servo_control_task(void *pvParameters)
 
 void app_main()
 {
-    i2c_master_init();
-    ESP_LOGI("PCA9685", "I2C initialized");
-
-    pca9685_init();
-    ESP_LOGI("PCA9685", "PCA9685 initialized");
-
-    ESP_LOGI("Driver", "All drivers initialised\n");
+	hexapod_init();
 
     // xSensorQueue = xQueueCreate(10, sizeof(message_t));
     xServoQueue = xQueueCreate(32, sizeof(ServoMessage));

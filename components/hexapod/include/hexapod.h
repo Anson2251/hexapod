@@ -43,6 +43,6 @@ HexapodLegServoDegree hexapod_leg_position_to_servo_degrees(Coordination coord);
 
 void set_leg_angle(uint8_t leg_id, HexapodLegServoDegree degrees);
 
-void i2c_master_init();
+void hexapod_init();
 
 #endif
