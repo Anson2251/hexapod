@@ -15,14 +15,14 @@
 
 #define SERVO_DEG_RANGE 180
 
-void i2c_master_init();
+void i2c_master_init(uint8_t i2c_num);
 
-void pca9685_init();
+void pca9685_init(uint8_t addr);
 
-void pca9685_write_byte(uint8_t reg, uint8_t data);
+void pca9685_write_byte(uint8_t addr, uint8_t reg, uint8_t data);
 
-void pca9685_set_pwm(uint8_t channel, uint16_t on, uint16_t off);
+void pca9685_set_pwm(uint8_t addr, uint8_t channel, uint16_t on, uint16_t off);
 
-void set_servo_angle(uint8_t channel, uint16_t angle);
+void set_servo_angle(uint8_t addr, uint8_t channel, uint16_t angle);
 
 #endif

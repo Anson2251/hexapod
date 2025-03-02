@@ -82,18 +82,18 @@ void set_leg_group(int8_t num, bool raise, bool forward)
 {
     for (int8_t i = 0; i < 3; i++)
     {
-        uint8_t leg_id = num * 3 + i;
+        uint8_t base_servo = (i * 3) | (num << 4); // <4-bit-addr><4-bit-base-servo-id>
         ServoMessage msg; // Use a stack-allocated variable
         msg.coord.x = Step ? forward : 0;
         msg.coord.y = Wingspan;
         msg.coord.z = -(raise ? CoreHeight + LegRiseHeight : CoreHeight);
-        msg.leg_id = leg_id; // one group has 3 legs, each leg has 3 servos
+        msg.leg_id = base_servo; // one group has 3 legs, each leg has 3 servos
 
         if (xQueueSend(xServoQueue, &msg, portMAX_DELAY) != pdPASS)
         {
-            ESP_LOGE("Gait Control", "Failed to send servo message for leg %d to queue\n", leg_id);
+            ESP_LOGE("Gait Control", "Failed to send servo message for leg %x to queue\n", base_servo & 0x0F);
         }
-        ESP_LOGI("Gait Control", "Servo message sent for leg %d: (X: %lf, Y: %lf, Z: %lf)", leg_id, msg.coord.x, msg.coord.y, msg.coord.z);
+        ESP_LOGI("Gait Control", "Servo message sent for leg %x: (X: %lf, Y: %lf, Z: %lf)", base_servo & 0x0F, msg.coord.x, msg.coord.y, msg.coord.z);
     }
 }
 
@@ -168,8 +168,8 @@ void servo_control_task(void *pvParameters)
         {
             HexapodLegServoDegree degrees = hexapod_leg_position_to_servo_degrees(msg.coord);
             set_leg_angle(msg.leg_id, degrees);
-            ESP_LOGI("Servo Control", "Servo message received for leg %d: (X: %lf, Y: %lf, Z: %lf)", msg.leg_id, msg.coord.x, msg.coord.y, msg.coord.z);
-            ESP_LOGI("Servo Control", "Servo angles set for leg %d: (A: %d, B: %d, C: %d)", msg.leg_id, degrees.a, degrees.b, degrees.c);
+            ESP_LOGI("Servo Control", "Servo message received for leg %x: (X: %lf, Y: %lf, Z: %lf)", msg.leg_id, msg.coord.x, msg.coord.y, msg.coord.z);
+            ESP_LOGI("Servo Control", "Servo angles set for leg %x: (A: %d, B: %d, C: %d)", msg.leg_id, degrees.a, degrees.b, degrees.c);
         }
     }
 }
