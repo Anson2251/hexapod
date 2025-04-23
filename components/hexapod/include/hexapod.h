@@ -16,6 +16,7 @@
 #define CoreHeight 0.3
 #define LegRiseHeight 0.5
 #define Wingspan 0.5
+#define ExpandWingspan 0.8
 #define Step 0.3
 
 #define ServoMaxDegree 180

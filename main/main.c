@@ -22,7 +22,14 @@ typedef enum
     GAIT_B,
     GAIT_C,
     GAIT_D,
-    // GAIT_E,
+    GAIT_BACKWARD_A,
+    GAIT_BACKWARD_B,
+    GAIT_BACKWARD_C,
+    GAIT_BACKWARD_D,
+    GAIT_LEFT_A,
+    GAIT_LEFT_B,
+    GAIT_RIGHT_A,
+    GAIT_RIGHT_B
 } GAIT_TYPE;
 
 // 定义消息结构体
@@ -78,14 +85,14 @@ QueueHandle_t xServoQueue;
 //     }
 // }
 
-void set_leg_group(int8_t num, bool raise, bool forward)
+void set_leg_group(int8_t num, bool raise, bool forward, bool expand)
 {
     for (int8_t i = 0; i < 3; i++)
     {
         uint8_t base_servo = (i * 3) | (num << 4); // <4-bit-addr><4-bit-base-servo-id>
         ServoMessage msg; // Use a stack-allocated variable
         msg.coord.x = Step ? forward : 0;
-        msg.coord.y = Wingspan;
+        msg.coord.y = expand ? Wingspan : ExpandWingspan;
         msg.coord.z = -(raise ? CoreHeight + LegRiseHeight : CoreHeight);
         msg.leg_id = base_servo; // one group has 3 legs, each leg has 3 servos
 
@@ -104,52 +111,79 @@ void gait_control_task(void *pvParameters)
     {
         switch (gait_pattern)
         {
+        // Forward movement gaits
         case GAIT_A:
-            // Gait A:
-            // - Leg group 0: Lowered and not moving forward (stance phase)
-            // - Leg group 1: Lowered and moving forward (swing phase)
-            set_leg_group(0, false, false);
-            set_leg_group(1, false, true);
-            ESP_LOGI("Gait Control", "Gait A");
+            set_leg_group(0, false, false, false);
+            set_leg_group(1, false, true, false);
+            ESP_LOGI("Gait Control", "Gait A (Forward)");
             break;
-
         case GAIT_B:
-            // Gait B:
-            // - Leg group 0: Raised and moving forward (swing phase)
-            // - Leg group 1: Lowered and not moving forward (stance phase)
-            set_leg_group(0, true, true);
-            set_leg_group(1, false, false);
-            ESP_LOGI("Gait Control", "Gait B");
+            set_leg_group(0, true, true, false);
+            set_leg_group(1, false, false, false);
+            ESP_LOGI("Gait Control", "Gait B (Forward)");
             break;
-
         case GAIT_C:
-            // Gait C:
-            // - Leg group 0: Lowered and moving forward (swing phase)
-            // - Leg group 1: Lowered and not moving forward (stance phase)
-            set_leg_group(0, false, true);
-            set_leg_group(1, false, false);
-            ESP_LOGI("Gait Control", "Gait C");
+            set_leg_group(0, false, true, false);
+            set_leg_group(1, false, false, false);
+            ESP_LOGI("Gait Control", "Gait C (Forward)");
+            break;
+        case GAIT_D:
+            set_leg_group(0, false, false, false);
+            set_leg_group(1, true, true, false);
+            ESP_LOGI("Gait Control", "Gait D (Forward)");
             break;
 
-        case GAIT_D:
-            // Gait D:
-            // - Leg group 0: Lowered and not moving forward (stance phase)
-            // - Leg group 1: Raised and moving forward (swing phase)
-            set_leg_group(0, false, false);
-            set_leg_group(1, true, true);
-            ESP_LOGI("Gait Control", "Gait D");
+        // Backward movement gaits
+        case GAIT_BACKWARD_A:
+            set_leg_group(0, false, false, false);
+            set_leg_group(1, false, false, false);
+            ESP_LOGI("Gait Control", "Gait BACKWARD A");
             break;
-        // case GAIT_E:
-        //     set_leg_group(0, false, false);
-        //     set_leg_group(1, false, true);
-        //     break;
+        case GAIT_BACKWARD_B:
+            set_leg_group(0, true, false, false);
+            set_leg_group(1, false, false, false);
+            ESP_LOGI("Gait Control", "Gait BACKWARD B");
+            break;
+        case GAIT_BACKWARD_C:
+            set_leg_group(0, false, false, false);
+            set_leg_group(1, false, false, false);
+            ESP_LOGI("Gait Control", "Gait BACKWARD C");
+            break;
+        case GAIT_BACKWARD_D:
+            set_leg_group(0, false, false, false);
+            set_leg_group(1, true, false, false);
+            ESP_LOGI("Gait Control", "Gait BACKWARD D");
+            break;
+
+        // Sideways movement gaits
+        case GAIT_LEFT_A:
+            set_leg_group(0, false, false, true);
+            set_leg_group(1, false, false, false);
+            ESP_LOGI("Gait Control", "Gait LEFT A");
+            break;
+        case GAIT_LEFT_B:
+            set_leg_group(0, true, false, true);
+            set_leg_group(1, false, false, false);
+            ESP_LOGI("Gait Control", "Gait LEFT B");
+            break;
+        case GAIT_RIGHT_A:
+            set_leg_group(0, false, false, false);
+            set_leg_group(1, false, false, true);
+            ESP_LOGI("Gait Control", "Gait RIGHT A");
+            break;
+        case GAIT_RIGHT_B:
+            set_leg_group(0, false, false, false);
+            set_leg_group(1, true, false, true);
+            ESP_LOGI("Gait Control", "Gait RIGHT B");
+            break;
+
         default:
             ESP_LOGE("Gait Control", "Invalid gait pattern");
             break;
         }
 
         gait_pattern++;
-        if (gait_pattern == 4)
+        if (gait_pattern == 12) // Total number of gait patterns now
         {
             gait_pattern = 0;
         }
